@@ -7,9 +7,11 @@ import rospy
 from std_msgs.msg import Empty
 from aerial_robot_msgs.msg import FlightNav
 import rosgraph
+from std_msgs.msg import Float64
 
-
-
+close_angle = 160 # change the parameter reffering to angle_talker.py
+open_angle  = -170
+init_angle = -70
 
 msg = """
 Instruction:
@@ -21,6 +23,9 @@ t:  takeoff
 l:  land
 f:  force landing
 h:  halt (force stop motor)
+1:  close the pruning tool
+2:  open the pruning tool
+3:  initialize servo angle (do before finish)
 
      q           w           e           [
 (turn left)  (forward)  (turn right)  (move up)
@@ -70,8 +75,12 @@ if __name__=="__main__":
         force_landing_pub = rospy.Publisher(ns + '/force_landing', Empty, queue_size=1)
         nav_pub = rospy.Publisher(robot_ns + '/uav/nav', FlightNav, queue_size=1)
 
-        xy_vel   = rospy.get_param("xy_vel", 0.2)
-        z_vel    = rospy.get_param("z_vel", 0.2)
+        # New publishers for task commands
+        prune_open_pub = rospy.Publisher('/dynamixel/cmd_angle', Float64, queue_size=10)
+
+
+        xy_vel   = rospy.get_param("xy_vel", 0.1)
+        z_vel    = rospy.get_param("z_vel", 0.1)
         yaw_vel  = rospy.get_param("yaw_vel", 0.2)
 
         motion_start_pub = rospy.Publisher('task_start', Empty, queue_size=1)
@@ -144,6 +153,23 @@ if __name__=="__main__":
                                 nav_msg.target_vel_z = -z_vel
                                 nav_pub.publish(nav_msg)
                                 msg = "send -z vel command"
+
+
+
+
+                        # New task commands
+                        if key == '1':
+                                prune_open_pub.publish(close_angle)
+                                msg = "prune tool closing."
+                        if key == '2':
+                                prune_open_pub.publish(open_angle)
+                                msg = "prune tool opening"
+                        if key == '3':
+                                prune_open_pub.publish(init_angle)
+                                msg = "prune tool initialized"
+
+
+
                         if key == '\x03':
                                 break
 
@@ -154,5 +180,4 @@ if __name__=="__main__":
                 print(repr(e))
         finally:
                 termios.tcsetattr(sys.stdin, termios.TCSADRAIN, settings)
-
 
