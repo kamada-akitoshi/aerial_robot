@@ -113,3 +113,5 @@ MUJOCO_LOG.txt
 robots/**/mujoco
 
 .vscode/
+
+docs/tilt.txt
