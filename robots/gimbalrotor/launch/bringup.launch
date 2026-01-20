@@ -65,6 +65,13 @@
     <param name="main_rate" value="40"/>
   </node>
 
+  ###########  PID Parameter Publisher  ###########
+  <node pkg="aerial_robot_base" type="pid_param_publisher.py" name="pid_param_publisher" ns="$(arg robot_ns)" output="screen">
+    <param name="config_file" value="$(arg config_dir)/$(arg airframe)/GimbalrotorControl.yaml" unless="$(arg simulation)"/>
+    <param name="config_file" value="$(arg config_dir)/$(arg airframe)/GimbalrotorControl_sim.yaml" if="$(arg simulation)"/>
+    <param name="publish_rate" value="1.0"/>
+  </node>
+
   ###########  Pruning Servo by Kamada ###########
   <node pkg="aerial_robot_base" 
         type="prune_servo_listener.py" 
