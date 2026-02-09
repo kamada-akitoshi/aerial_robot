@@ -8,7 +8,7 @@ def main():
     
     rospy.sleep(1.0) # Wait for connection
     
-    angle_min = -180.0
+    angle_min = -160.0
     angle_max = 170.0
     interval = 3.0 # seconds
     
