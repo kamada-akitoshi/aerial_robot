@@ -5,7 +5,7 @@ import sys
 import rospy
 from std_msgs.msg import Float64  # 角度データを扱うトピックの型
 from dx2lib import *  # dx2libをインポート
-from setting import *  # サンプル共通のポート・ボーレート・ID等
+# from setting import *  # サンプル共通のポート・ボーレート・ID等
 
 # グローバル変数の初期化
 COMPort = "/dev/ttyACM0"
