@@ -9,8 +9,8 @@ from aerial_robot_msgs.msg import FlightNav
 import rosgraph
 from std_msgs.msg import Float64
 
-close_angle = 170 # change the parameter reffering to angle_talker.py
-open_angle  = -160
+close_angle = 150 # change the parameter reffering to angle_talker.py
+open_angle  = -170
 init_angle = -70
 
 msg = """
