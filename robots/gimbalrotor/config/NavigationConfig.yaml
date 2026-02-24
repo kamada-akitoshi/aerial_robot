@@ -19,7 +19,7 @@ navigation:
   teleop_local_frame: fc
 
   cmd_vel_lev2_gain : 2.0
-  # nav_vel_limit : 0.2
+  nav_vel_limit : 0.1
   # vel_nav_threshold : 0.01
   # land_pos_convergent_thresh: 0.1
   # land_vel_convergent_thresh: 1.0
