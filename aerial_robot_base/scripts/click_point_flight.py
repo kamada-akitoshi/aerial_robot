@@ -3,7 +3,6 @@ import rospy
 import tf
 import numpy as np
 from geometry_msgs.msg import PointStamped
-from nav_msgs.msg import Odometry
 from std_msgs.msg import Header
 from aerial_robot_msgs.msg import FlightNav
 
@@ -22,26 +21,17 @@ class ClickPointFlight(object):
         self.scissor_frame = rospy.get_param('~scissor_frame', 'gimbalrotor1/scissor_center')
         self.cog_frame = rospy.get_param('~cog_frame', 'gimbalrotor1/cog')
         self.nav_topic = rospy.get_param('~nav_topic', '/gimbalrotor1/uav/nav')
-        self.odom_topic = rospy.get_param('~odom_topic', '/gimbalrotor1/uav/cog/odom')
         self.publish_rate = rospy.get_param('~publish_rate', 10)
         self.timeout = rospy.get_param('~tf_timeout', 1.0)
-
-        self.current_odom_yaw = None
 
         self.listener = tf.TransformListener()
         rospy.sleep(0.5)
 
         self.pub = rospy.Publisher(self.nav_topic, FlightNav, queue_size=1)
         rospy.Subscriber('/clicked_point', PointStamped, self.clicked_cb, queue_size=1)
-        rospy.Subscriber(self.odom_topic, Odometry, self.odom_cb, queue_size=1)
 
         rospy.loginfo('click_point_flight: listening /clicked_point, publishing FlightNav to %s', self.nav_topic)
         rospy.spin()
-
-    def odom_cb(self, msg):
-        q = msg.pose.pose.orientation
-        euler = tf.transformations.euler_from_quaternion([q.x, q.y, q.z, q.w])
-        self.current_odom_yaw = euler[2]
 
     def clicked_cb(self, msg):
         # クリック点を表示して、端末で Enter 押下を待つ（'c' + Enter でキャンセル）
@@ -90,21 +80,18 @@ class ClickPointFlight(object):
         ty = point_world.point.y
         tz = point_world.point.z
 
-        # Determine current robot yaw for maintaining orientation
-        # Prioritize Odometry as it has better timestamp synchronization in this environment
-        if self.current_odom_yaw is not None:
-            current_yaw = self.current_odom_yaw
-            rospy.loginfo("Using current Yaw from Odometry: %.3f rad", current_yaw)
-        else:
-            # Fallback to TF if Odometry hasn't been received yet
-            try:
-                (t_world_cog, q_world_cog) = self.listener.lookupTransform(world_frame, self.cog_frame, rospy.Time(0))
-                euler = tf.transformations.euler_from_quaternion(q_world_cog)
-                current_yaw = euler[2]
-                rospy.loginfo("Using current Yaw from TF (Fallback): %.3f rad", current_yaw)
-            except (tf.Exception, tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
-                current_yaw = 0.0
-                rospy.logwarn("Could not get current yaw from Odom or TF. Using 0.0 rad. Error: %s", str(e))
+        # Use current robot yaw to maintain orientation and use for target position calculation
+        # To avoid TF time synchronization issues, we use the latest available transform (Time(0))
+        # and if that fails, we use a default identity orientation.
+        try:
+            # We don't use waitForTransform with duration here to avoid blocking on bad clock sync
+            (t_world_cog, q_world_cog) = self.listener.lookupTransform(world_frame, self.cog_frame, rospy.Time(0))
+            euler = tf.transformations.euler_from_quaternion(q_world_cog)
+            current_yaw = euler[2]
+            rospy.loginfo("Using current Yaw from TF: %.3f rad", current_yaw)
+        except (tf.Exception, tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+            current_yaw = 0.0
+            rospy.logwarn("Could not get current yaw via TF due to possible time sync issues (Error: %s). Using 0.0 rad", str(e))
 
         q_target = tf.transformations.quaternion_from_euler(0, 0, current_yaw)
         T_world_scissor = make_transform_matrix([tx, ty, tz], q_target)
