@@ -153,6 +153,7 @@ class ClickPointFlight(object):
             rospy.logerr("Odometry lost. Cannot execute flight.")
             return
 
+        # Current COG position
         start_pos = np.array([self.curr_odom.pose.pose.position.x, 
                              self.curr_odom.pose.pose.position.y, 
                              self.curr_odom.pose.pose.position.z])
@@ -162,56 +163,79 @@ class ClickPointFlight(object):
         goal_pos = data['desired_cog_pos']
         target_frame = data['target_frame']
         current_yaw = data['yaw']
-        
-        diff_vec = goal_pos - start_pos
-        distance = np.linalg.norm(diff_vec)
         velocity_limit = 0.1
-        duration = distance / velocity_limit
-        if duration < 0.1: duration = 0.1
-            
-        steps = int(duration * self.publish_rate)
-        vel_vec = diff_vec / duration
-        
-        rospy.loginfo('Flight started: Dist=%.3fm, Duration=%.1fs', distance, duration)
-
         rate = rospy.Rate(self.publish_rate)
-        for i in range(steps + 1):
-            if rospy.is_shutdown(): break
-            
-            alpha = float(i) / steps if steps > 0 else 1.0
-            curr_target = (1.0 - alpha) * start_pos + alpha * goal_pos
-            
-            nav = FlightNav()
-            nav.header = Header(stamp=rospy.Time.now(), frame_id=target_frame)
-            nav.control_frame = 0  # WORLD_FRAME
-            nav.target = 1         # COG
-            
-            nav.pos_xy_nav_mode = 4 # POS_VEL_MODE
-            nav.target_pos_x = float(curr_target[0])
-            nav.target_pos_y = float(curr_target[1])
-            nav.target_vel_x = float(vel_vec[0])
-            nav.target_vel_y = float(vel_vec[1])
-            
-            nav.pos_z_nav_mode = 4
-            nav.target_pos_z = float(curr_target[2])
-            nav.target_vel_z = float(vel_vec[2])
-            
-            nav.yaw_nav_mode = 2 # POS_MODE
-            nav.target_yaw = float(current_yaw)
-            
-            self.pub.publish(nav)
-            try: rate.sleep()
-            except rospy.ROSInterruptException: break
 
-        # Stop command
-        nav.pos_xy_nav_mode = 2 
+        # Helper function for a single trajectory segment
+        def run_segment(seg_start, seg_goal):
+            diff = seg_goal - seg_start
+            dist = np.linalg.norm(diff)
+            if dist < 0.01: return seg_goal
+            
+            duration = dist / velocity_limit
+            steps = int(duration * self.publish_rate)
+            if steps < 1: steps = 1
+            vel_vec = diff / duration
+            
+            print("DEBUG: [Flight] Segment - Dist: %.3f m, Duration: %.1f s" % (dist, duration))
+            sys.stdout.flush()
+
+            for i in range(steps + 1):
+                if rospy.is_shutdown(): break
+                alpha = float(i) / steps
+                curr_target = (1.0 - alpha) * seg_start + alpha * seg_goal
+                
+                nav = FlightNav()
+                nav.header = Header(stamp=rospy.Time.now(), frame_id=target_frame)
+                nav.control_frame = 0  # WORLD_FRAME
+                nav.target = 1         # COG
+                
+                nav.pos_xy_nav_mode = 4 # POS_VEL_MODE
+                nav.target_pos_x = float(curr_target[0])
+                nav.target_pos_y = float(curr_target[1])
+                nav.target_vel_x = float(vel_vec[0]) if i < steps else 0.0
+                nav.target_vel_y = float(vel_vec[1]) if i < steps else 0.0
+                
+                nav.pos_z_nav_mode = 4
+                nav.target_pos_z = float(curr_target[2])
+                nav.target_vel_z = float(vel_vec[2]) if i < steps else 0.0
+                
+                nav.yaw_nav_mode = 2 # POS_MODE
+                nav.target_yaw = float(current_yaw)
+                
+                self.pub.publish(nav)
+                try: rate.sleep()
+                except rospy.ROSInterruptException: break
+            return seg_goal
+
+        # --- Phase 1: Vertical (Z) ---
+        print("DEBUG: [Flight] Phase 1 - Vertical Move")
+        mid_pos = np.array([start_pos[0], start_pos[1], goal_pos[2]])
+        run_segment(start_pos, mid_pos)
+
+        # --- Phase 2: Horizontal (XY) ---
+        print("DEBUG: [Flight] Phase 2 - Horizontal Move")
+        run_segment(mid_pos, goal_pos)
+
+        # Final Stop/Hold Command
+        nav = FlightNav()
+        nav.header = Header(stamp=rospy.Time.now(), frame_id=target_frame)
+        nav.control_frame = 0
+        nav.target = 1
+        nav.pos_xy_nav_mode = 2 # POS_MODE
         nav.pos_z_nav_mode = 2
+        nav.yaw_nav_mode = 2
+        nav.target_pos_x = float(goal_pos[0])
+        nav.target_pos_y = float(goal_pos[1])
+        nav.target_pos_z = float(goal_pos[2])
+        nav.target_yaw = float(current_yaw)
+        
         for _ in range(5):
             nav.header.stamp = rospy.Time.now()
             self.pub.publish(nav)
             rospy.sleep(0.05)
 
-        rospy.loginfo('Trajectory completed. At target position.')
+        rospy.loginfo('Trajectory completed (Z then XY).')
 
 if __name__ == '__main__':
     try:
