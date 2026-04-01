@@ -311,7 +311,7 @@
 
   <xacro:extra_module name = "lidar_imu" parent = "base_link" visible = "0" > <!-- should be IMU frame -->
     <!-- <origin xyz="${0.0} ${0.0} ${0.16082}" rpy="0 0 ${-pi/2.0}"/>  -->
-   <origin xyz="${0.005255} ${-0.004071} ${0.1163}" rpy="0 0 ${-pi/2.0}"/>  <!-- True IMU frame by CAD and validated by calibration -->
+   <origin xyz="${0.005255} ${-0.004071} ${0.11163}" rpy="0 0 ${-pi/2.0}"/>  <!-- True IMU frame by CAD and validated by calibration -->
     <inertial>
       <mass value = "0" />
       <origin xyz="0 0 0" rpy="0 0 0"/>
