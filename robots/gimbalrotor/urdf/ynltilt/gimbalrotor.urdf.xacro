@@ -179,7 +179,8 @@
     <!-- ZED X MINI Camera Integration -->
     <xacro:zed_camera name="zedxm" model="zedxm" parent="base_link">
       <!-- ドローン原点からzedXminiのねじ穴までの相対座標（ZED on TOP plate）-->
-      <origin xyz="0.08653 0.0 0.09595" rpy="0 0 0" />
+      <!-- <origin xyz="0.08653 0.0 0.09595" rpy="0 0 0" /> -->
+      <origin xyz="0.089457 0.006355 0.104867" rpy="-0.00410719 -0.00016010 0.01163528" /> <!-- calibrated by LiDAR and ZEDxMini, 2026/6/5 -->
     </xacro:zed_camera>
 
     
