@@ -93,9 +93,18 @@ class ClickPointFlight(object):
             current_yaw = 0.0
             rospy.logwarn("Could not get current yaw via TF due to possible time sync issues (Error: %s). Using 0.0 rad", str(e))
 
-        q_target = tf.transformations.quaternion_from_euler(0, 0, current_yaw)
-        T_world_scissor = make_transform_matrix([tx, ty, tz], q_target)
+        # ドローンの目標姿勢（Yawのみ維持，Roll/Pitchは0）
+        q_cog_target = tf.transformations.quaternion_from_euler(0, 0, current_yaw)
+        T_world_cog_rot = make_transform_matrix([0, 0, 0], q_cog_target)
+        
+        # ハサミの目標姿勢は，ドローンの目標姿勢にハサミの相対姿勢を掛け合わせたものとする
+        T_world_scissor_rot = np.dot(T_world_cog_rot, T_cog_scissor)
+        
+        # ハサミの目標位置をセットして，正しい T_world_scissor を構築
+        T_world_scissor = T_world_scissor_rot.copy()
+        T_world_scissor[0:3, 3] = [tx, ty, tz]
 
+        # 重心の目標座標を逆算（これにより回転成分が相殺され，ドローンの目標 Yaw は正しく current_yaw になります）
         T_world_cog = np.dot(T_world_scissor, T_cog_scissor_inv)
         desired_cog_pos = T_world_cog[0:3, 3]
 
