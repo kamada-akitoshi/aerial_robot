@@ -285,8 +285,21 @@ void ServoBridge::servoStatesCallback(const spinal::ServoStatesConstPtr& state_m
     }
 
 
+  // sensor_msgs::JointState servo_states_msg;
+  // servo_states_msg.header.stamp = state_msg->stamp;
+
   sensor_msgs::JointState servo_states_msg;
-  servo_states_msg.header.stamp = state_msg->stamp;
+  if (state_msg->stamp.isZero())
+    {
+      servo_states_msg.header.stamp = ros::Time::now();
+    }
+  else
+    {
+      servo_states_msg.header.stamp = state_msg->stamp;
+    }
+
+    
+
 
   for(auto servo_group : servos_handler_)
     {
