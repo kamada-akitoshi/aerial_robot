@@ -11,7 +11,7 @@ from std_msgs.msg import Float64
 from std_srvs.srv import Trigger
 
 close_angle = 140 # change the parameter reffering to angle_talker.py
-open_angle  = -140
+open_angle  = -170
 init_angle = -70
 
 msg = """
