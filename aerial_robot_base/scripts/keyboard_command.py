@@ -8,6 +8,7 @@ from std_msgs.msg import Empty
 from aerial_robot_msgs.msg import FlightNav
 import rosgraph
 from std_msgs.msg import Float64
+from std_srvs.srv import Trigger
 
 close_angle = 140 # change the parameter reffering to angle_talker.py
 open_angle  = -170
@@ -23,6 +24,7 @@ t:  takeoff
 l:  land
 f:  force landing
 h:  halt (force stop motor)
+b:  back / emergency retract to init (Pinit)
 1:  close the pruning tool
 2:  open the pruning tool
 3:  initialize servo angle (do before finish)
@@ -78,6 +80,8 @@ if __name__=="__main__":
         # New publishers for task commands
         prune_open_pub = rospy.Publisher('/dynamixel/cmd_angle', Float64, queue_size=10)
 
+        srv_abort = rospy.ServiceProxy('/branch_cutter/abort', Trigger)
+        srv_back = rospy.ServiceProxy('/branch_cutter/back', Trigger)
 
         xy_vel   = rospy.get_param("xy_vel", 0.1)
         z_vel    = rospy.get_param("z_vel", 0.1)
@@ -88,12 +92,29 @@ if __name__=="__main__":
         try:
                 while(True):
                         nav_msg = FlightNav()
-                        nav_msg.control_frame = FlightNav.WORLD_FRAME
+                        nav_msg.control_frame = FlightNav.LOCAL_FRAME
                         nav_msg.target = FlightNav.COG
 
                         key = getKey()
 
                         msg = ""
+
+                        # 手動移動キー（w/a/s/d/q/e/[/]）入力時，自動で自律飛行を中断 (abort) してパブリッシュ競合を防止
+                        if key in ['w', 's', 'a', 'd', 'q', 'e', '[', ']']:
+                                try:
+                                        srv_abort()
+                                except Exception:
+                                        pass
+
+                        if key == 'b':
+                                try:
+                                        res = srv_back()
+                                        if res.success:
+                                                msg = "send back command successfully"
+                                        else:
+                                                msg = "failed to send back command: " + res.message
+                                except Exception as e:
+                                        msg = "service call failed: " + str(e)
 
                         if key == 'l':
                                 land_pub.publish(Empty())
