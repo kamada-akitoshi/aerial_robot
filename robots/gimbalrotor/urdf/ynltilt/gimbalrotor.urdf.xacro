@@ -28,15 +28,25 @@
     <link name="base_link">
       <!-- Inertial must be calculate in COG and multiple 10^9 against SolidWorks output -->
 
-    <!--With Pruning-Tool-Sector and zedXmini ON THE PLATE-->
+      <!--With Pruning-Tool-Sector and zedXmini NO RUBBER-->
     <inertial>
+            <origin xyz="0.07383 -0.00449 0.04888" rpy="0 0 0"/>
+            <mass value="2.38072"/>
+            <inertia
+                ixx="0.03029456591" ixy="-0.00307189598" ixz="-0.00749699522"
+                iyx="-0.00307189598" iyy="0.07989192864" iyz="0.00048543501"
+                izx="-0.00749699522" izy="0.00048543501" izz="0.09909772171"/>
+      </inertial>
+
+    <!--With Pruning-Tool-Sector and zedXmini ON THE PLATE-->
+<!--    <inertial>
             <origin xyz="0.06310 -0.00517 0.05062" rpy="0 0 0"/>
             <mass value="2.33579"/>
             <inertia
                 ixx="0.03008400484" ixy="-0.00297777401" ixz="-0.00664821011"
                 iyx="-0.00297777401" iyy="0.06882060466" iyz="0.00047002139"
                 izx="-0.00664821011" izy="0.00047002139" izz="0.08922548478"/>
-      </inertial> 
+      </inertial> -->
 
 
       <!--with Pruning-Tool-Sector and zedXmini BETWEEN PLATES-->
@@ -181,7 +191,8 @@
       <!-- ドローン原点からzedXminiのねじ穴までの相対座標（ZED on TOP plate）-->
       <!-- <origin xyz="0.08653 0.0 0.09595" rpy="0 0 0" /> -->
       <!-- <origin xyz="0.089457 0.006355 0.104867" rpy="-0.00410719 -0.00016010 0.01163528" /> --> <!-- calibrated by LiDAR and ZEDxMini, 2026/6/5 -->
-      <origin xyz="0.087365 -0.000370 0.100222" rpy="-0.01462965 -0.00390974 0.01466164" /> <!-- calibrated by LiDAR and ZEDxMini, 2026/6/15 (0614 merged) -->
+      <!--    <origin xyz="0.087365 -0.000370 0.100222" rpy="-0.01462965 -0.00390974 0.01466164" />  calibrated by LiDAR and ZEDxMini, 2026/6/15 (0614 merged) -->
+      <origin xyz="0.07618 0.0 0.08917" rpy="0 0 0" /> <!-- no rubber -->
     </xacro:zed_camera>
 
     
@@ -325,7 +336,7 @@
 
     <!-- Arm (Scissors) rotation center -->
   <xacro:extra_module name="scissor_center" parent="base_link" visible="1">
-    <origin xyz="0.42126 -0.0154 -0.0003" rpy="0 0 0"/>
+    <origin xyz="0.46135 -0.01557 0.0000" rpy="0 0 0"/>
     <inertial>
       <mass value="0.00001"/>
       <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -335,6 +346,30 @@
     </inertial>
   </xacro:extra_module>
 
+    <!-- Arm (Scissors) left edge -->
+  <xacro:extra_module name="scissor_left_edge" parent="base_link" visible="1">
+    <origin xyz="0.51576 0.01394 0.000" rpy="0 0 0"/>
+    <inertial>
+      <mass value="0.00001"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia
+          ixx="0.000001" ixy="0.0" ixz="0.0"
+          iyy="0.000001" iyz="0.0" izz="0.000001"/>
+    </inertial>
+  </xacro:extra_module>
+
+      <!-- Arm (Scissors) right edge -->
+  <xacro:extra_module name="scissor_right_edge" parent="base_link" visible="1">
+    <origin xyz="0.52174 -0.03045 0.0000" rpy="0 0 0"/>
+    <inertial>
+      <mass value="0.00001"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <inertia
+          ixx="0.000001" ixy="0.0" ixz="0.0"
+          iyy="0.000001" iyz="0.0" izz="0.000001"/>
+    </inertial>
+  </xacro:extra_module>
+  
   <link name="arm_link_1">
     <inertial>
       <mass value="0.001"/>
