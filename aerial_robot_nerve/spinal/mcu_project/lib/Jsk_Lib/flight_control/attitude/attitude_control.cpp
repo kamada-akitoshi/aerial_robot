@@ -48,7 +48,8 @@ AttitudeController::AttitudeController():
   p_matrix_pseudo_inverse_inertia_sub_("p_matrix_pseudo_inverse_inertia", &AttitudeController::pMatrixInertiaCallback, this),
   pwm_test_sub_("pwm_test", &AttitudeController::pwmTestCallback, this ),
   att_control_srv_("set_attitude_control", &AttitudeController::setAttitudeControlCallback, this),
-  torque_allocation_matrix_inv_sub_("torque_allocation_matrix_inv", &AttitudeController::torqueAllocationMatrixInvCallback, this)
+  torque_allocation_matrix_inv_sub_("torque_allocation_matrix_inv", &AttitudeController::torqueAllocationMatrixInvCallback, this),
+  gimbal_dof_(0), rotor_coef_(1)
 {
 }
 
@@ -359,13 +360,10 @@ void AttitudeController::update(void)
 
       if(force_landing_flag_)
         {
-          float total_thrust = 0;
-          /* sum */
-          for(int i = 0; i < motor_number_; i++) total_thrust += base_thrust_term_[i];
-          /* average */
-          float average_thrust = total_thrust / motor_number_;
+          /* Compare physical per-rotor thrust norm so gimbalrotor (2ch/3ch per rotor) triggers descent properly. */
+          float average_thrust = calcAveragePhysicalThrust(base_thrust_term_);
 
-          if(average_thrust > force_landing_thrust_)
+          if(average_thrust > force_landing_thrust_ && average_thrust > 1e-4f)
             {
               for(int i = 0; i < motor_number_; i++)
                 base_thrust_term_[i] -= (base_thrust_term_[i] / average_thrust * FORCE_LANDING_INTEGRAL);
@@ -374,6 +372,34 @@ void AttitudeController::update(void)
     }
   /* target thrust -> target pwm -> HAL */
   pwmsControl();
+}
+
+float AttitudeController::calcRotorNorm(const float* vec, int rotor_idx) const
+{
+  const uint8_t coef = (rotor_coef_ > 0) ? rotor_coef_ : 1;
+  switch(gimbal_dof_)
+    {
+    case 2:
+      return ap::pythagorous3(vec[coef * rotor_idx], vec[coef * rotor_idx + 1], vec[coef * rotor_idx + 2]);
+    case 1:
+      return ap::pythagorous2(vec[coef * rotor_idx], vec[coef * rotor_idx + 1]);
+    default:
+      return fabs(vec[rotor_idx]);
+    }
+}
+
+float AttitudeController::calcAveragePhysicalThrust(const float* thrust_vec) const
+{
+  const uint8_t coef = (rotor_coef_ > 0) ? rotor_coef_ : 1;
+  const int rotor_count = motor_number_ / coef;
+  if(rotor_count <= 0) return 0.0f;
+
+  float total_thrust = 0.0f;
+  for(int i = 0; i < rotor_count; i++)
+    {
+      total_thrust += (gimbal_dof_ == 0) ? thrust_vec[i] : calcRotorNorm(thrust_vec, i);
+    }
+  return total_thrust / static_cast<float>(rotor_count);
 }
 
 
@@ -454,9 +480,7 @@ void AttitudeController::fourAxisCommandCallback( const spinal::FourAxisCommand 
 
   if(force_landing_flag_)
     {
-      float total_thrust = 0;
-      for(int i = 0; i < motor_number_; i++) total_thrust += cmd_msg.base_thrust[i];
-      float average_thrust = total_thrust / motor_number_;
+      float average_thrust = calcAveragePhysicalThrust(&cmd_msg.base_thrust[0]);
       if(average_thrust < force_landing_thrust_) return;
     }
 
@@ -889,15 +913,16 @@ void AttitudeController::pwmConversion()
   if(start_control_flag_)
     {
       float residual_term = thrust_limit - max_thrust / rotor_devider_;
+      float max_base_thrust = calcRotorNorm(base_thrust_term_, max_thrust_index);
 
-      if(residual_term < 0 && base_thrust_term_[max_thrust_index] > 0)
+      if(residual_term < 0 && max_base_thrust > 1e-4f)
         {
-          base_thrust_decreasing_rate = residual_term / (base_thrust_term_[max_thrust_index] / rotor_devider_);
+          base_thrust_decreasing_rate = residual_term / (max_base_thrust / rotor_devider_);
           yaw_decreasing_rate = -1; // also, we have to ignore the yaw control
         }
       else
         {
-          if(max_yaw_term_index_ != -1 && fabs(base_thrust_term_[0]) > 0 )
+          if(max_yaw_term_index_ != -1 && calcRotorNorm(base_thrust_term_, 0) > 1e-4f )
             {
               /* check saturation level1: yaw control saturation */
               max_thrust = 0;
@@ -948,7 +973,11 @@ void AttitudeController::pwmConversion()
 
               if(residual_term < 0)
                 {
-                  yaw_decreasing_rate = residual_term / (fabs(yaw_term_[thrust_index]) / rotor_devider_);
+                  float yaw_thrust_i = calcRotorNorm(yaw_term_, thrust_index);
+                  if(yaw_thrust_i > 1e-4f)
+                    yaw_decreasing_rate = residual_term / (yaw_thrust_i / rotor_devider_);
+                  else
+                    yaw_decreasing_rate = -1;
                 }
 
               if(yaw_decreasing_rate < -1) yaw_decreasing_rate = -1;
@@ -978,16 +1007,18 @@ void AttitudeController::pwmConversion()
                 f_i.x = target_thrust_[i*3];
                 f_i.y = target_thrust_[i*3+1];
                 f_i.z = target_thrust_[i*3+2];
-            
-                float gimbal_candidate_roll = atan2f(-f_i.y, f_i.z);
-                float gimbal_candidate_pitch = atan2f(f_i.x, -f_i.y * sin(gimbal_candidate_roll) + f_i.z * cos(gimbal_candidate_roll));
-                target_thrust_[i] = ap::pythagorous3(f_i.x,f_i.y,f_i.z);
+                const float min_fz = (min_thrust_ > 1.5f) ? min_thrust_ : 1.5f;
+                const float fz_safe = (f_i.z < min_fz) ? min_fz : f_i.z;
+
+                float gimbal_candidate_roll = atan2f(-f_i.y, fz_safe);
+                float gimbal_candidate_pitch = atan2f(f_i.x, -f_i.y * sin(gimbal_candidate_roll) + fz_safe * cos(gimbal_candidate_roll));
+                target_thrust_[i] = (f_i.z <= 0.0f) ? min_thrust_ : ap::pythagorous3(f_i.x,f_i.y,f_i.z);
 
                 /* simple lpf */
                 if(std::isfinite(gimbal_candidate_roll) && std::isfinite(gimbal_candidate_pitch)){
                   target_gimbal_angles_[2*i] =(target_gimbal_angles_[2*i]+ gimbal_candidate_roll)/2;
                   target_gimbal_angles_[2*i+1] =(target_gimbal_angles_[2*i+1]+ gimbal_candidate_pitch)/2;
-            
+
                 }
                 break;
               }
@@ -996,8 +1027,15 @@ void AttitudeController::pwmConversion()
                 ap::Vector3f f_i;
                 f_i.x = target_thrust_[i*2];
                 f_i.z = target_thrust_[i*2+1];
-                float gimbal_candidate = atan2f(-f_i.x, f_i.z);
-                target_thrust_[i] = ap::pythagorous2(f_i.x,f_i.z);
+                /* Guard against low/negative f_z gimbal whip (atan2f singularity during wind gusts / unloading). */
+                const float min_fz = (min_thrust_ > 1.5f) ? min_thrust_ : 1.5f;
+                const float fz_safe = (f_i.z < min_fz) ? min_fz : f_i.z;
+                float gimbal_candidate = atan2f(-f_i.x, fz_safe);
+                const float max_gimbal_rad = 0.785398f; // +-45 deg physical/aero guard
+                if(gimbal_candidate > max_gimbal_rad) gimbal_candidate = max_gimbal_rad;
+                else if(gimbal_candidate < -max_gimbal_rad) gimbal_candidate = -max_gimbal_rad;
+
+                target_thrust_[i] = (f_i.z <= 0.0f) ? min_thrust_ : ap::pythagorous2(f_i.x,f_i.z);
 
                 /* simple lpf */
                 if(std::isfinite(gimbal_candidate)) target_gimbal_angles_[i] =(target_gimbal_angles_[i]+ gimbal_candidate)/2;

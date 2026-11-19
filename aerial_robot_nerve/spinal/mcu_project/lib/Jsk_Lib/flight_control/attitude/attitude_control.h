@@ -220,6 +220,8 @@ private:
   void pwmTestCallback(const std_msgs::Float32& pwm_msg);
   void pwmConversion(void);
   void pwmsControl(void);
+  float calcRotorNorm(const float* vec, int rotor_idx) const;
+  float calcAveragePhysicalThrust(const float* thrust_vec) const;
 
   void reset(void);
 

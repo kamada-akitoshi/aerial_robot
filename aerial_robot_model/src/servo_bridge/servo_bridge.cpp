@@ -35,6 +35,7 @@
 
 
 #include <aerial_robot_model/servo_bridge.h>
+#include <set>
 
 ServoBridge::ServoBridge(ros::NodeHandle nh, ros::NodeHandle nhp): nh_(nh),nhp_(nhp)
 {
@@ -247,8 +248,15 @@ void ServoBridge::servoStatesCallback(const spinal::ServoStatesConstPtr& state_m
 
 
   /* group of "common", search in all group */
+  /* spinal pads trailing slots with index 0 in older firmware; keep only first entry per servo index */
+  std::set<int> seen_index;
   for(auto it: state_msg->servos)
     {
+      if(!seen_index.insert(it.index).second)
+        {
+          ROS_DEBUG_STREAM("servo index " << (int)it.index << " appears again in one message, skip (padding)");
+          continue;
+        }
       for(auto servo_group: servos_handler_)
         {
           // no real state from real machine, skip
