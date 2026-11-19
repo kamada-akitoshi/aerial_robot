@@ -51,7 +51,9 @@ void DirectServo::sendData()
   uint32_t now_time = HAL_GetTick();
   if( now_time - servo_last_pub_time_ >= SERVO_PUB_INTERVAL)
     {
-      for (unsigned int i = 0; i < servo_handler_.getServoNum(); i++) {
+      servo_state_msg_.stamp = nh_->now();
+      unsigned int pub_idx = 0;
+      for (unsigned int i = 0; i < servo_handler_.getServoNum() && pub_idx < MAX_SERVO_NUM; i++) {
         const ServoData& s = servo_handler_.getServo()[i];
         if (s.send_data_flag_ != 0) {
           spinal::ServoState servo;
@@ -60,23 +62,26 @@ void DirectServo::sendData()
           servo.temp = s.present_temp_;
           servo.load = s.present_current_;
           servo.error = s.hardware_error_status_;
-          servo_state_msg_.servos[i] = servo;
+          servo_state_msg_.servos[pub_idx++] = servo;
         }
       }
+      servo_state_msg_.servos_length = pub_idx;
       servo_state_pub_.publish(&servo_state_msg_);
       servo_last_pub_time_ = now_time;
     }
   if( now_time - servo_torque_last_pub_time_ >= SERVO_TORQUE_PUB_INTERVAL)
     {
-      for (unsigned int i = 0; i < servo_handler_.getServoNum(); i++) {
+      unsigned int torque_idx = 0;
+      for (unsigned int i = 0; i < servo_handler_.getServoNum() && torque_idx < MAX_SERVO_NUM; i++) {
         const ServoData& s = servo_handler_.getServo()[i];
         if (s.send_data_flag_ != 0) {
-          servo_torque_state_msg_.torque_enable[i] = s.torque_enable_;
+          servo_torque_state_msg_.torque_enable[torque_idx++] = s.torque_enable_;
         }
       }
+      servo_torque_state_msg_.torque_enable_length = torque_idx;
       servo_torque_state_pub_.publish(&servo_torque_state_msg_);
       servo_torque_last_pub_time_= now_time;
-    }  
+    }
 }
 
 void DirectServo::torqueEnable(const std::map<uint8_t, float>& servo_map)
@@ -107,10 +112,10 @@ void DirectServo::setGoalAngle(const std::map<uint8_t, float>& servo_map, uint8_
   for (auto servo : servo_map)
     {
       JointProf joint_prof = joint_profiles_[servo.first];
-      int32_t goal_pos;
-      if(value_type = ValueType::BIT){
+      int32_t goal_pos = 0;
+      if(value_type == ValueType::BIT){
         goal_pos = static_cast<int32_t>(servo.second);
-      }else if(value_type = ValueType::RADIAN){
+      }else if(value_type == ValueType::RADIAN){
         goal_pos = static_cast<int32_t>(servo.second*joint_prof.angle_sgn/joint_prof.angle_scale + joint_prof.zero_point_offset);
       }
 
