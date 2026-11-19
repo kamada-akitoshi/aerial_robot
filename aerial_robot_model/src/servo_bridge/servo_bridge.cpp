@@ -35,6 +35,21 @@
 
 
 #include <aerial_robot_model/servo_bridge.h>
+#include <set>
+
+namespace
+{
+/* spinal pads trailing slots with index 0 in unmodified firmware; keep first entry per servo index */
+bool isDuplicateServoIndex(std::set<int>& seen_index, int index)
+{
+  if (!seen_index.insert(index).second)
+    {
+      ROS_DEBUG_STREAM("servo index " << index << " appears again in one message, skip (padding)");
+      return true;
+    }
+  return false;
+}
+}
 
 ServoBridge::ServoBridge(ros::NodeHandle nh, ros::NodeHandle nhp): nh_(nh),nhp_(nhp)
 {
@@ -223,11 +238,15 @@ ServoBridge::ServoBridge(ros::NodeHandle nh, ros::NodeHandle nhp): nh_(nh),nhp_(
 
 void ServoBridge::servoStatesCallback(const spinal::ServoStatesConstPtr& state_msg, const string& servo_group_name)
 {
+  std::set<int> seen_index;
+
   /* independent group servo process without state publish */
   if(servo_group_name != std::string("common"))
     {
       for(auto it: state_msg->servos)
         {
+          if(isDuplicateServoIndex(seen_index, it.index)) continue;
+
           auto servo_handler = find_if(servos_handler_[servo_group_name].begin(),
                                        servos_handler_[servo_group_name].end(),
                                        [&](SingleServoHandlePtr s) {return it.index == s->getId();} );
@@ -249,6 +268,8 @@ void ServoBridge::servoStatesCallback(const spinal::ServoStatesConstPtr& state_m
   /* group of "common", search in all group */
   for(auto it: state_msg->servos)
     {
+      if(isDuplicateServoIndex(seen_index, it.index)) continue;
+
       for(auto servo_group: servos_handler_)
         {
           // no real state from real machine, skip
